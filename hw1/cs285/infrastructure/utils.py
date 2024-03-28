@@ -43,7 +43,9 @@ def sample_trajectory(env, policy, max_path_length, render=False):
                 img = env.render()
             # image_obs.append(cv2.resize(img, dsize=(250, 250), interpolation=cv2.INTER_CUBIC))
             #@ 
-            image_obs.append(img)
+            if img is not None:
+                resized_img = cv2.resize(img, dsize=(250, 250), interpolation=cv2.INTER_CUBIC)
+                image_obs.append(resized_img)
 
         #@---
         #@My code
@@ -54,7 +56,9 @@ def sample_trajectory(env, policy, max_path_length, render=False):
         action_nparray = ptu.to_numpy(sampled_action)
 
         # TODO: take that action and get reward and next ob
-        next_ob, rew, term, trun, info, done  = env.step(action_nparray)
+        next_ob, rew, term, trun, info  = env.step(action_nparray)
+        
+        done = term or trun
         
         # TODO rollout can end due to done, or due to max_path_length
         steps += 1
