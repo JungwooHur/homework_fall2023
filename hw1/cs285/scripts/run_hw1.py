@@ -5,6 +5,8 @@ Functions to edit:
     1. run_training_loop
 """
 
+#@ My comments start with #@.
+
 import pickle
 import os
 import time
@@ -20,7 +22,6 @@ from cs285.infrastructure.replay_buffer import ReplayBuffer
 from cs285.policies.MLP_policy import MLPPolicySL
 from cs285.policies.loaded_gaussian_policy import LoadedGaussianPolicy
 
-
 # how many rollouts to save as videos to tensorboard
 MAX_NVIDEO = 2
 MAX_VIDEO_LEN = 40  # we overwrite this in the code below
@@ -28,6 +29,42 @@ MAX_VIDEO_LEN = 40  # we overwrite this in the code below
 MJ_ENV_NAMES = ["Ant-v4", "Walker2d-v4", "HalfCheetah-v4", "Hopper-v4"]
 
 
+#@ Flow of run_training_loop function:
+
+#@ 1. Init
+#@ set logger, random seed, GPU..
+#@ create and init env
+#@ init agent and policy net
+
+#@ 2. Load Expert Policy
+#@ load expert policy from file
+
+#@ 3. Start Training Loop
+#@ repeat training by the set number of iterations (n_iter)
+
+#@ 4. Collect Data
+#@ In the initial iteration, learn from expert data (behavior cloning)
+#@ In subsequent iterations, additional data is collected from the env
+#@ if the DAgger algorithm is used
+
+#@ 5. Add Data and Manage Buffer
+#@ Add the collected data to the replay buffer
+
+#@ 6. Train Agent
+#@ Update the agent's policy with data sampled from the replay buffer
+
+#@ 7. Evaluate Performance and Logging
+#@ Optionally, evaluating the performance of agents in the environment.
+#@ Logging training metrics and recording video if necessary
+
+#@ 8. Check Iteration
+#@ Repeat steps 3-7 until all iterations are complete
+
+#@ 9. Cleanup and Save
+#@ Save the final model and organize the logging information when the
+#@ training is complete
+
+#@ training agents with algorithms (bc or dagger)
 def run_training_loop(params):
     """
     Runs training with the specified parameters
@@ -40,7 +77,9 @@ def run_training_loop(params):
     #############
     ## INIT
     #############
-
+    
+    #@ Init episode parameters, logger, and random seed ...etc
+    
     # Get params, create logger, create TF session
     logger = Logger(params['logdir'])
 
@@ -60,11 +99,14 @@ def run_training_loop(params):
     #############
     ## ENV
     #############
+    
+    #@ Make env and set episode max length, observation dimension ,and action dimension
 
     # Make the gym environment
+    #@ render_mode = None -> 'human'
     env = gym.make(params['env_name'], render_mode=None)
     env.reset(seed=seed)
-
+    
     # Maximum length for episodes
     params['ep_len'] = params['ep_len'] or env.spec.max_episode_steps
     MAX_VIDEO_LEN = params['ep_len']
@@ -83,8 +125,11 @@ def run_training_loop(params):
     #############
     ## AGENT
     #############
+    
+    #@ Initialize Multi Layer Perceptron that defines agent's policy
+    #@ go to policies > MLP_policy.py and edit missing functions in this class
 
-    # TODO: Implement missing functions in this class.
+    # TODO: Implement missing functions in this class (MLPPolicySL in MLP_plolicy.py).
     actor = MLPPolicySL(
         ac_dim,
         ob_dim,
@@ -92,14 +137,16 @@ def run_training_loop(params):
         params['size'],
         learning_rate=params['learning_rate'],
     )
-
+    
+    #@ initialize replaybuffer to save trained data
     # replay buffer
     replay_buffer = ReplayBuffer(params['max_replay_buffer_size'])
 
     #######################
     ## LOAD EXPERT POLICY
     #######################
-
+    
+    #@ Load expert's policy to use for bc or DAgger
     print('Loading expert policy from...', params['expert_policy_file'])
     expert_policy = LoadedGaussianPolicy(params['expert_policy_file'])
     expert_policy.to(ptu.device)
@@ -109,6 +156,8 @@ def run_training_loop(params):
     ## TRAINING LOOP
     #######################
 
+    #@ trains the agent along some iterations, play policy => data acquisition => policy (agent) update => logging
+    
     # init vars at beginning of training
     total_envsteps = 0
     start_time = time.time()
@@ -123,25 +172,45 @@ def run_training_loop(params):
 
         print("\nCollecting data to be used for training...")
         if itr == 0:
+            #@ For the first time, using expert's policy do behavior cloning.
             # BC training from expert data.
             paths = pickle.load(open(params['expert_data'], 'rb'))
             envsteps_this_batch = 0
         else:
+            #@ Using DAgger algorithm: additional data acquisition => relabel the sampled data by expert
+            
             # DAGGER training from sampled data relabeled by expert
             assert params['do_dagger']
             # TODO: collect `params['batch_size']` transitions
+            
+            #@ My code starts here
+            batch_size = params['train_batch_size']
+            
+            indices = np.random.permutation(len(replay_buffer.obs))[:batch_size]
+            ob_batch = replay_buffer.obs[indices]
+            ac_batch = replay_buffer.acs[indices]
+            #@---
+            
             # HINT: use utils.sample_trajectories
             # TODO: implement missing parts of utils.sample_trajectory
-            paths, envsteps_this_batch = TODO
-
+            
+            
+            #@
+            paths, envsteps_this_batch = utils.sample_trajectories(env, actor, params['batch_size'], params['ep_len'])
+            #@---
+            
             # relabel the collected obs with actions from a provided expert policy
             if params['do_dagger']:
                 print("\nRelabelling collected observations with labels from an expert policy...")
-
+                #@
+                for path in paths:
+                    expert_actions = [expert_policy.get_action(obs) for obs in path['observation']]
+                    path["actions"] = np.array(expert_actions)
+                #@---
                 # TODO: relabel collected obsevations (from our policy) with labels from expert policy
                 # HINT: query the policy (using the get_action function) with paths[i]["observation"]
                 # and replace paths[i]["action"] with these expert labels
-                paths = TODO
+                # paths = TODO
 
         total_envsteps += envsteps_this_batch
         # add collected data to replay buffer
@@ -151,18 +220,31 @@ def run_training_loop(params):
         print('\nTraining agent using sampled data from replay buffer...')
         training_logs = []
         for _ in range(params['num_agent_train_steps_per_iter']):
+            
+            # TODO: sample some data from replay_buffer
+            # HINT1: how much data = params['train_batch_size']
+            # HINT2: use np.random.permutation to sample random indices
+            # HINT3: return corresponding data points from each array (i.e., not different indices from each array)
+            # for imitation learning, we only need observations and actions.  
+            
+            #@---
+            #@My code
+            batch_size = params['train_batch_size']
+            
+            buffer_size = len(replay_buffer.obs) #length replay_buffer.obs???
+            
+            indices = np.random.permutation(buffer_size)[:batch_size]
+            
+            
+            ob_batch, ac_batch = replay_buffer.obs[indices], replay_buffer.acs[indices]
+            #@---
 
-          # TODO: sample some data from replay_buffer
-          # HINT1: how much data = params['train_batch_size']
-          # HINT2: use np.random.permutation to sample random indices
-          # HINT3: return corresponding data points from each array (i.e., not different indices from each array)
-          # for imitation learning, we only need observations and actions.  
-          ob_batch, ac_batch = TODO
+            # use the sampled data to train an agent
+            train_log = actor.update(ob_batch, ac_batch)
+            training_logs.append(train_log)
 
-          # use the sampled data to train an agent
-          train_log = actor.update(ob_batch, ac_batch)
-          training_logs.append(train_log)
-
+        #@ save video, log matrices
+        
         # log/save
         print('\nBeginning logging procedure...')
         if log_video:

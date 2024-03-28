@@ -1,5 +1,7 @@
 import torch
 
+#@ set GPU acceleration, convert data PyTorch tensor <=> NumPy array
+
 device = None
 
 

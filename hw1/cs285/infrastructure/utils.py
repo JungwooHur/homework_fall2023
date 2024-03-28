@@ -12,16 +12,27 @@ import time
 
 from cs285.infrastructure import pytorch_util as ptu
 
+#@ useful to automate the agent's performance evaluation, data collection, 
+#@ and preprocessing process in algorithms. By applying the agent's behavior policy 
+#@ to the environment, the data can be analyzed, and based on this, the agent's learning 
+#@ process can be adjusted, and performance can be improved.
 
+#@ samples the rollout that agent follows the policy at env
 def sample_trajectory(env, policy, max_path_length, render=False):
     """Sample a rollout in the environment from a policy."""
+    
+    #@ init env and get init obs
     
     # initialize env for the beginning of a new rollout
     ob =  env.reset() # TODO: initial observation after resetting the env
 
     # init vars
     obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
+    
+    #@ while loop: select action according to the policy, act => get next_obs rews term 
     steps = 0
+    
+    
     while True:
 
         # render image of the simulated env
@@ -30,22 +41,33 @@ def sample_trajectory(env, policy, max_path_length, render=False):
                 img = env.sim.render(camera_name='track', height=500, width=500)[::-1]
             else:
                 img = env.render(mode='single_rgb_array')
-            image_obs.append(cv2.resize(img, dsize=(250, 250), interpolation=cv2.INTER_CUBIC))
-    
+            # image_obs.append(cv2.resize(img, dsize=(250, 250), interpolation=cv2.INTER_CUBIC))
+            #@ 
+            image_obs.append(img)
+
+        #@---
+        #@My code
+
         # TODO use the most recent ob to decide what to do
-        ac = TODO # HINT: this is a numpy array
-        ac = ac[0]
+        ob_tensor = ptu.from_numpy(ob)
+        sampled_action = policy.forward(ob_tensor)# HINT: this is a numpy array
+        action_nparray = ptu.to_numpy(sampled_action)
 
         # TODO: take that action and get reward and next ob
-        next_ob, rew, done, _ = TODO
+        next_ob, rew, done, _ = env.step(action_nparray)
         
         # TODO rollout can end due to done, or due to max_path_length
         steps += 1
-        rollout_done = TODO # HINT: this is either 0 or 1
+        rollout_done = done or steps >= max_path_length
         
+        # rollout_done = TODO # HINT: this is either 0 or 1
+        
+        #@---
+        
+        #@ record
         # record result of taking that action
         obs.append(ob)
-        acs.append(ac)
+        acs.append(sampled_action)
         rewards.append(rew)
         next_obs.append(next_ob)
         terminals.append(rollout_done)
@@ -56,6 +78,7 @@ def sample_trajectory(env, policy, max_path_length, render=False):
         if rollout_done:
             break
 
+    #@ convert each components to array and return it as dictionary 
     return {"observation" : np.array(obs, dtype=np.float32),
             "image_obs" : np.array(image_obs, dtype=np.uint8),
             "reward" : np.array(rewards, dtype=np.float32),
@@ -63,7 +86,7 @@ def sample_trajectory(env, policy, max_path_length, render=False):
             "next_observation": np.array(next_obs, dtype=np.float32),
             "terminal": np.array(terminals, dtype=np.float32)}
 
-
+#@ sample some trajectories. Collect data untill the number of steps reach min_timesteps_per_batch   
 def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, render=False):
     """Collect rollouts until we have collected min_timesteps_per_batch steps."""
 
@@ -80,7 +103,7 @@ def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, r
 
     return paths, timesteps_this_batch
 
-
+#@ sample some trajectories. Collect data untill the number of paths reach max_path_length   
 def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False):
     """Collect ntraj rollouts."""
 
@@ -95,7 +118,7 @@ def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False):
 ########################################
 ########################################
 
-
+#@ convert rollouts to seperate arrays
 def convert_listofrollouts(paths, concat_rew=True):
     """
         Take a list of rollout dictionaries
@@ -116,7 +139,8 @@ def convert_listofrollouts(paths, concat_rew=True):
 ########################################
 ########################################
             
-
+#@ compute metrics ex) mean standard deviation max min returns(rewards), mean episode length
+#@ return the metrics to form of OrderedDict
 def compute_metrics(paths, eval_paths):
     """Compute metrics for logging."""
 
@@ -148,6 +172,6 @@ def compute_metrics(paths, eval_paths):
 ############################################
 ############################################
 
-
+#@ return given path's reward length 
 def get_pathlength(path):
     return len(path["reward"])
