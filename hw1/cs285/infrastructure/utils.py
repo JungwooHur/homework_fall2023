@@ -54,10 +54,13 @@ def sample_trajectory(env, policy, max_path_length, render=False):
         action_nparray = ptu.to_numpy(sampled_action)
 
         # TODO: take that action and get reward and next ob
-        next_ob, rew, term, trun, info, done  = env.step(action_nparray)
+        next_ob, rew, term, trun, info  = env.step(action_nparray)
         
         # TODO rollout can end due to done, or due to max_path_length
         steps += 1
+        
+        done = term or trun
+        
         rollout_done = done or steps >= max_path_length
         
         # rollout_done = TODO # HINT: this is either 0 or 1
