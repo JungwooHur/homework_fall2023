@@ -157,10 +157,9 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         std = torch.exp(self.logstd)
         
         act_dist = distributions.Normal(mean, std)
-        sampled_action = act_dist.sample()
         
         
-        return sampled_action
+        return act_dist
         #@---
 
     
@@ -175,7 +174,7 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         :return:
             dict: 'Training Loss': supervised learning loss
         """
-        #@ Define the loss function, update the parameters in NN with back-propagation?
+        #@ Define the loss function, update the parameters in NN with back-propagation
         #@ Normally we minimize the difference between estimated action and the expert's action
         
         # TODO: update the policy and return the loss
@@ -183,24 +182,22 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         #@---
         #@My code
         
+        self.optimizer.zero_grad()
         
         #@ predict action with NN
         obs_tensor = ptu.from_numpy(observations)
         acs_tensor = ptu.from_numpy(actions)
         
-        estimated_actions = self.mean_net(obs_tensor)
+        act_dist = self.forward(obs_tensor)
+        log_probs = act_dist.log_prob(acs_tensor)
         
-        #@ compute loss with Mean Squared Error  => Mean[(estimated actions - expert's actions)^2]
-        loss_fn = nn.MSELoss()
-        loss = loss_fn(estimated_actions, acs_tensor)
-        
-        self.optimizer.zero_grad()
+        #@ compute loss with - log prob
+        loss = -log_probs.mean()
         loss.backward()
         self.optimizer.step()
-        
+        #@---
         
         return {
             # You can add extra logging information here, but keep this line
             'Training Loss': ptu.to_numpy(loss),
         }
-        #@---
